@@ -33,15 +33,15 @@ def ask():
             lang = "en"
 
         system_prompts = {
-            "it": "Sei un esperto tecnico dei prodotti Tecnaria. Usa solo il testo fornito per rispondere. Se non trovi una risposta nel testo, di' che non è presente.",
-            "en": "You are a technical expert on Tecnaria products. Use only the provided text to answer. If no answer is found, say it is not present.",
-            "fr": "Vous êtes un expert technique des produits Tecnaria. Utilisez uniquement le texte fourni pour répondre. Si vous ne trouvez pas la réponse, dites qu'elle n'est pas présente.",
-            "de": "Sie sind ein technischer Experte für Tecnaria-Produkte. Verwenden Sie nur den bereitgestellten Text. Wenn Sie keine Antwort finden, sagen Sie, dass sie nicht vorhanden ist.",
-            "es": "Eres un experto técnico en productos Tecnaria. Usa solo el texto proporcionado. Si no encuentras una respuesta, di que no está presente."
+            "it": "Sei un esperto tecnico dei prodotti Tecnaria. Rispondi usando solo il testo fornito, ma puoi riformulare, collegare concetti simili o impliciti se presenti. Non è necessario che il testo contenga le stesse parole della domanda.",
+            "en": "You are a technical expert on Tecnaria products. Use only the provided text to answer, but you can reformulate and connect related or implicit concepts. Exact word matching is not required.",
+            "fr": "Vous êtes un expert des produits Tecnaria. Utilisez uniquement le texte fourni, mais vous pouvez reformuler ou déduire si nécessaire. Une correspondance exacte n'est pas requise.",
+            "de": "Sie sind ein Experte für Tecnaria-Produkte. Verwenden Sie ausschließlich den bereitgestellten Text, aber Sie dürfen Begriffe umformulieren oder logisch verknüpfen.",
+            "es": "Eres un experto en productos Tecnaria. Usa únicamente el texto proporcionado, pero puedes reformular o deducir si es necesario."
         }
         system_prompt = system_prompts.get(lang, system_prompts["en"])
 
-        # ✅ Blocco mirato
+        # 🧠 Estrai il blocco giusto
         keyword = trova_keyword(user_prompt)
         context = ""
         if keyword:
@@ -56,15 +56,16 @@ def ask():
         if not context.strip():
             return jsonify({"error": "Nessuna informazione trovata."}), 400
 
-        prompt = f"""Devi rispondere SOLO utilizzando il contenuto fornito qui sotto. Non inventare nulla. Se la risposta non è nel testo, rispondi chiaramente: 'Il documento non contiene questa informazione.'
+        prompt = f"""Il testo seguente contiene informazioni tecniche ufficiali di Tecnaria.
+Puoi rispondere solo usando questo testo, ma sei autorizzato a riformulare, sintetizzare e collegare concetti anche se non sono scritti in modo identico.
 
-Contenuto Tecnaria:
+TESTO:
 {context}
 
-Domanda:
+DOMANDA:
 {user_prompt}
 
-Risposta tecnica:"""
+RISPOSTA TECNICA:"""
 
         response = client.chat.completions.create(
             model="gpt-4o",
