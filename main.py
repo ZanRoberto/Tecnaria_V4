@@ -3,11 +3,20 @@ from flask import Flask, request, jsonify, render_template
 import os
 from bridge_scraper import estrai_testo_vocami
 from scraper_tecnaria import scrape_tecnaria_results
+from estrai_blocco import estrai_blocco_tematico
 from openai import OpenAI
 from langdetect import detect
 
 app = Flask(__name__)
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+def trova_keyword(dominio):
+    parole = dominio.lower().split()
+    parole_chiave = ["chiodatrice", "connettore", "software", "diapason", "p560", "pulsa", "cemento", "acciaio", "legno"]
+    for parola in parole_chiave:
+        if parola in parole:
+            return parola
+    return None
 
 @app.route("/")
 def index():
@@ -32,14 +41,22 @@ def ask():
         }
         system_prompt = system_prompts.get(lang, system_prompts["en"])
 
-        context = estrai_testo_vocami()
-        if user_prompt.lower() not in context.lower():
-            context = scrape_tecnaria_results(user_prompt)
+        # ✅ Prova a usare un blocco tematico dinamico
+        keyword = trova_keyword(user_prompt)
+        context = ""
+        if keyword:
+            context = estrai_blocco_tematico(keyword)
+
+        # Fallback se blocco non trovato o vuoto
+        if not context.strip():
+            context = estrai_testo_vocami()
+            if user_prompt.lower() not in context.lower():
+                context = scrape_tecnaria_results(user_prompt)
 
         if not context.strip():
             return jsonify({"error": "Nessuna informazione trovata."}), 400
 
-        prompt = f"""Il seguente testo è tratto dalla documentazione ufficiale Tecnaria.
+        prompt = f"""Il seguente testo è tratto dalla documentazione tecnica ufficiale di Tecnaria.
 
 TESTO:
 {context}
