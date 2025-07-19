@@ -3,7 +3,7 @@ from flask import Flask, request, jsonify, render_template
 import os
 from bridge_scraper import estrai_testo_vocami
 from scraper_tecnaria import scrape_tecnaria_results
-from estrai_blocco_intelligente import estrai_blocco_tematico
+from estrai_blocco_intelligente import estrai_blocco_smart
 from openai import OpenAI
 from langdetect import detect
 
@@ -33,19 +33,19 @@ def ask():
             lang = "en"
 
         system_prompts = {
-            "it": "Sei un esperto tecnico dei prodotti Tecnaria. Rispondi usando solo il testo fornito, ma puoi riformulare, collegare concetti simili o impliciti se presenti. Non è necessario che il testo contenga le stesse parole della domanda.",
-            "en": "You are a technical expert on Tecnaria products. Use only the provided text to answer, but you can reformulate and connect related or implicit concepts. Exact word matching is not required.",
-            "fr": "Vous êtes un expert des produits Tecnaria. Utilisez uniquement le texte fourni, mais vous pouvez reformuler ou déduire si nécessaire. Une correspondance exacte n'est pas requise.",
-            "de": "Sie sind ein Experte für Tecnaria-Produkte. Verwenden Sie ausschließlich den bereitgestellten Text, aber Sie dürfen Begriffe umformulieren oder logisch verknüpfen.",
-            "es": "Eres un experto en productos Tecnaria. Usa únicamente el texto proporcionado, pero puedes reformular o deducir si es necesario."
+            "it": "Sei un esperto tecnico dei prodotti Tecnaria. Usa solo il testo fornito per rispondere, ma puoi collegare o riformulare concetti anche se non scritti in modo identico.",
+            "en": "You are a technical expert on Tecnaria products. Use only the provided text to answer, but you can reformulate and connect implicit concepts.",
+            "fr": "Vous êtes un expert technique des produits Tecnaria. Utilisez uniquement le texte fourni, mais vous pouvez reformuler ou déduire si nécessaire.",
+            "de": "Sie sind ein technischer Experte für Tecnaria-Produkte. Verwenden Sie ausschließlich den bereitgestellten Text, aber Sie dürfen Begriffe umformulieren oder logisch verknüpfen.",
+            "es": "Eres un experto técnico en productos Tecnaria. Usa únicamente el texto proporcionado, pero puedes reformular o deducir si es necesario."
         }
         system_prompt = system_prompts.get(lang, system_prompts["en"])
 
-        # 🧠 Estrai il blocco giusto
+        # ✅ Usa il blocco smart
         keyword = trova_keyword(user_prompt)
         context = ""
         if keyword:
-            context = estrai_blocco_tematico(keyword)
+            context = estrai_blocco_smart(keyword)
 
         # Fallback
         if not context.strip():
@@ -57,7 +57,7 @@ def ask():
             return jsonify({"error": "Nessuna informazione trovata."}), 400
 
         prompt = f"""Il testo seguente contiene informazioni tecniche ufficiali di Tecnaria.
-Puoi rispondere solo usando questo testo, ma sei autorizzato a riformulare, sintetizzare e collegare concetti anche se non sono scritti in modo identico.
+Rispondi solo usando questo testo. Puoi riformulare e collegare concetti impliciti, ma non inventare.
 
 TESTO:
 {context}
