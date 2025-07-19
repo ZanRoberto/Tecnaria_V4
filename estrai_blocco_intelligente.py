@@ -13,18 +13,23 @@ def estrai_blocco_tematico(keyword):
 
         blocco = []
         found = False
-        buffer = []
-
         for i, p in enumerate(paragraphs):
-            if keyword.lower() in p.lower() or p.strip().lower().startswith("### " + keyword.lower()):
+            if keyword.lower() in p.lower():
                 found = True
-                buffer = paragraphs[i:i+6]  # prendi fino a 5 paragrafi dopo il match
+                blocco = paragraphs[i:i+6]  # Prendi i prossimi 6 paragrafi
                 break
 
-        if found:
-            blocco.extend(buffer)
+        if found and blocco:
+            return "\n".join(blocco).strip()
+        else:
+            return "❌ Nessun blocco trovato con la parola chiave: " + keyword
 
-        return "\n".join(blocco).strip()
     except Exception as e:
-        print(f"[ERRORE blocco tematico intelligente] {e}")
-        return ""
+        return f"[ERRORE] {e}"
+
+if __name__ == "__main__":
+    keyword = "chiodatrice"
+    print("🔍 Blocco tematico per:", keyword)
+    print("-" * 60)
+    testo = estrai_blocco_tematico(keyword)
+    print(testo)
