@@ -3,7 +3,7 @@ from flask import Flask, request, jsonify, render_template
 import os
 from bridge_scraper import estrai_testo_vocami
 from scraper_tecnaria import scrape_tecnaria_results
-from estrai_blocco import estrai_blocco_tematico
+from estrai_blocco_intelligente import estrai_blocco_tematico
 from openai import OpenAI
 from langdetect import detect
 
@@ -33,21 +33,21 @@ def ask():
             lang = "en"
 
         system_prompts = {
-            "it": "Sei un esperto tecnico dei prodotti Tecnaria. Rispondi con precisione e chiarezza.",
-            "en": "You are a technical expert on Tecnaria products. Answer with precision and clarity.",
-            "fr": "Vous êtes un expert technique des produits Tecnaria. Répondez avec précision et clarté.",
-            "de": "Sie sind ein technischer Experte für Tecnaria-Produkte. Antworten Sie präzise und klar.",
-            "es": "Eres un experto técnico en productos Tecnaria. Responde con precisión y claridad."
+            "it": "Sei un esperto tecnico dei prodotti Tecnaria. Usa solo il testo fornito per rispondere. Se non trovi una risposta nel testo, di' che non è presente.",
+            "en": "You are a technical expert on Tecnaria products. Use only the provided text to answer. If no answer is found, say it is not present.",
+            "fr": "Vous êtes un expert technique des produits Tecnaria. Utilisez uniquement le texte fourni pour répondre. Si vous ne trouvez pas la réponse, dites qu'elle n'est pas présente.",
+            "de": "Sie sind ein technischer Experte für Tecnaria-Produkte. Verwenden Sie nur den bereitgestellten Text. Wenn Sie keine Antwort finden, sagen Sie, dass sie nicht vorhanden ist.",
+            "es": "Eres un experto técnico en productos Tecnaria. Usa solo el texto proporcionado. Si no encuentras una respuesta, di que no está presente."
         }
         system_prompt = system_prompts.get(lang, system_prompts["en"])
 
-        # ✅ Prova a usare un blocco tematico dinamico
+        # ✅ Blocco mirato
         keyword = trova_keyword(user_prompt)
         context = ""
         if keyword:
             context = estrai_blocco_tematico(keyword)
 
-        # Fallback se blocco non trovato o vuoto
+        # Fallback
         if not context.strip():
             context = estrai_testo_vocami()
             if user_prompt.lower() not in context.lower():
@@ -56,15 +56,15 @@ def ask():
         if not context.strip():
             return jsonify({"error": "Nessuna informazione trovata."}), 400
 
-        prompt = f"""Il seguente testo è tratto dalla documentazione tecnica ufficiale di Tecnaria.
+        prompt = f"""Devi rispondere SOLO utilizzando il contenuto fornito qui sotto. Non inventare nulla. Se la risposta non è nel testo, rispondi chiaramente: 'Il documento non contiene questa informazione.'
 
-TESTO:
+Contenuto Tecnaria:
 {context}
 
-DOMANDA:
+Domanda:
 {user_prompt}
 
-RISPOSTA TECNICA:"""
+Risposta tecnica:"""
 
         response = client.chat.completions.create(
             model="gpt-4o",
@@ -72,7 +72,7 @@ RISPOSTA TECNICA:"""
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.3
+            temperature=0.2
         )
 
         answer = response.choices[0].message.content
