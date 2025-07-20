@@ -1,9 +1,8 @@
-
 from flask import Flask, request, jsonify, render_template
 import os
 from bridge_scraper import estrai_testo_vocami
 from scraper_tecnaria import scrape_tecnaria_results
-from estrai_blocco_intelligente import estrai_blocco_smart
+from estrai_blocco_smart import estrai_blocco_smart
 from openai import OpenAI
 from langdetect import detect
 
@@ -33,31 +32,32 @@ def ask():
             lang = "en"
 
         system_prompts = {
-            "it": "Sei un esperto tecnico dei prodotti Tecnaria. Usa solo il testo fornito per rispondere, ma puoi collegare o riformulare concetti anche se non scritti in modo identico.",
-            "en": "You are a technical expert on Tecnaria products. Use only the provided text to answer, but you can reformulate and connect implicit concepts.",
-            "fr": "Vous êtes un expert technique des produits Tecnaria. Utilisez uniquement le texte fourni, mais vous pouvez reformuler ou déduire si nécessaire.",
-            "de": "Sie sind ein technischer Experte für Tecnaria-Produkte. Verwenden Sie ausschließlich den bereitgestellten Text, aber Sie dürfen Begriffe umformulieren oder logisch verknüpfen.",
-            "es": "Eres un experto técnico en productos Tecnaria. Usa únicamente el texto proporcionado, pero puedes reformular o deducir si es necesario."
+            "it": "Sei un esperto tecnico dei prodotti Tecnaria. Rispondi usando il testo fornito, collegando concetti impliciti se necessario. Se non trovi risposta lì, puoi attingere da altre fonti ufficiali Tecnaria.",
+            "en": "You are a technical expert on Tecnaria products. Use the provided text to answer, connecting related concepts. If the answer is not there, refer to other official Tecnaria sources.",
+            "fr": "Vous êtes un expert technique des produits Tecnaria. Utilisez le texte fourni pour répondre, ou appuyez-vous sur d'autres sources officielles si nécessaire.",
+            "de": "Sie sind ein technischer Experte für Tecnaria-Produkte. Verwenden Sie den bereitgestellten Text oder greifen Sie bei Bedarf auf andere offizielle Quellen zurück.",
+            "es": "Eres un experto técnico en productos Tecnaria. Usa el texto proporcionado y si es necesario, apóyate en otras fuentes oficiales."
         }
         system_prompt = system_prompts.get(lang, system_prompts["en"])
 
-        # ✅ Usa il blocco smart
+        # 🔍 Prova prima blocco smart
         keyword = trova_keyword(user_prompt)
         context = ""
         if keyword:
             context = estrai_blocco_smart(keyword)
 
-        # Fallback
+        # 🔁 Fallback su intero documento
         if not context.strip():
             context = estrai_testo_vocami()
-            if user_prompt.lower() not in context.lower():
-                context = scrape_tecnaria_results(user_prompt)
+
+        # 🔁 Fallback finale su scraping sito
+        if not context.strip():
+            context = scrape_tecnaria_results(user_prompt)
 
         if not context.strip():
             return jsonify({"error": "Nessuna informazione trovata."}), 400
 
-        prompt = f"""Il testo seguente contiene informazioni tecniche ufficiali di Tecnaria.
-Rispondi solo usando questo testo. Puoi riformulare e collegare concetti impliciti, ma non inventare.
+        prompt = f"""Il testo seguente è stato raccolto da fonti ufficiali Tecnaria. Usa solo questo contenuto per rispondere, riformulando se necessario. Se qualcosa è implicito ma chiaro, puoi includerlo nella risposta.
 
 TESTO:
 {context}
@@ -73,7 +73,7 @@ RISPOSTA TECNICA:"""
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.2
+            temperature=0.3
         )
 
         answer = response.choices[0].message.content
