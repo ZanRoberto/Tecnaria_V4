@@ -11,7 +11,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def trova_keyword(dominio):
     parole = dominio.lower().split()
-    parole_chiave = ["chiodatrice", "connettore", "software", "diapason", "p560", "pulsa", "cemento", "acciaio", "legno"]
+    parole_chiave = ["chiodatrice", "chiodatrici", "p560", "pulsa", "connettore", "software", "diapason", "tbs", "accoppiamento", "solaio"]
     for parola in parole_chiave:
         if parola in parole:
             return parola
@@ -27,34 +27,37 @@ def ask():
         user_prompt = request.json.get("prompt", "").strip()
         lang = detect(user_prompt)
 
+        # Prompt system coerente con lingua
         system_prompts = {
-            "it": "Sei un esperto tecnico dei prodotti Tecnaria. Rispondi in italiano solo alla domanda, usando il testo fornito se presente. Se non c'è una risposta nel testo, puoi usare la tua conoscenza.",
-            "en": "You are a technical expert on Tecnaria products. Answer in English using only the provided text if available. If it's missing, rely on your own knowledge.",
-            "fr": "Vous êtes un expert technique des produits Tecnaria. Répondez en français en utilisant le texte fourni si disponible, sinon utilisez vos connaissances.",
-            "de": "Sie sind ein technischer Experte für Tecnaria-Produkte. Antworten Sie auf Deutsch nur mit dem bereitgestellten Text oder Ihrem Wissen.",
-            "es": "Eres un experto técnico en productos Tecnaria. Responde en español usando el texto si está disponible; si no, usa tus conocimientos."
+            "it": "Sei un esperto tecnico di Tecnaria. Rispondi in italiano. Usa il testo solo se è utile alla domanda. Se la domanda è più generale o il testo è irrilevante, usa le tue conoscenze.",
+            "en": "You are a technical expert on Tecnaria. Answer in English. Use the text only if it's relevant to the question. If the question is general or the text is not useful, rely on your knowledge.",
+            "fr": "Vous êtes un expert des produits Tecnaria. Répondez en français. Utilisez le texte uniquement s'il est pertinent. Sinon, utilisez vos connaissances.",
+            "de": "Sie sind ein Experte für Tecnaria. Antworten Sie auf Deutsch. Verwenden Sie den Text nur, wenn er relevant ist. Andernfalls verwenden Sie Ihr Wissen.",
+            "es": "Eres un experto en productos Tecnaria. Responde en español. Usa el texto solo si es relevante. Si no, usa tu conocimiento."
         }
         system_prompt = system_prompts.get(lang, system_prompts["en"])
 
-        # STEP 1: Prova estrazione smart se c'è una keyword
+        # STEP 1: cerco keyword utile
         keyword = trova_keyword(user_prompt)
         context = ""
         if keyword:
             context = estrai_blocco_smart(keyword)
 
-        # STEP 2: Prova a prendere tutto il documento
+        # STEP 2: se ancora vuoto, provo a usare tutto il documento
         if not context.strip():
             context = estrai_testo_vocami()
 
-        # STEP 3: Prova scraping sito
+        # STEP 3: se ancora nulla, provo lo scraping dal sito
         if not context.strip():
             context = scrape_tecnaria_results(user_prompt)
 
-        # STEP 4: Se ancora nulla, GPT può rispondere liberamente
+        # STEP 4: costruttore finale del prompt
         if context.strip():
-            prompt = f"""Rispondi solo alla domanda sottostante, usando il testo fornito. Non includere contenuti aggiuntivi se non richiesti esplicitamente nella domanda. Se un concetto è implicito ma presente, puoi usarlo.
+            prompt = f"""Rispondi solo alla domanda sottostante.
+Se il testo è utile alla domanda, usalo.
+Se la domanda è più generale, o se il testo non è rilevante, puoi rispondere basandoti sulla tua conoscenza tecnica.
 
-TESTO:
+TESTO DISPONIBILE:
 {context}
 
 DOMANDA:
@@ -62,13 +65,15 @@ DOMANDA:
 
 RISPOSTA:"""
         else:
-            prompt = f"""Rispondi con precisione alla domanda qui sotto basandoti sulle tue conoscenze tecniche aggiornate, come se fossi un esperto dei prodotti e dei servizi di Tecnaria.
+            prompt = f"""Rispondi alla domanda qui sotto come esperto dei prodotti Tecnaria.
+Puoi usare la tua conoscenza anche se nessun testo è stato fornito.
 
 DOMANDA:
 {user_prompt}
 
 RISPOSTA:"""
 
+        # Invio a GPT
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
@@ -77,8 +82,10 @@ RISPOSTA:"""
             ],
             temperature=0.3
         )
+
         answer = response.choices[0].message.content
         return jsonify({"answer": answer})
+
     except Exception as e:
         return jsonify({"error": f"Errore: {str(e)}"}), 500
 
