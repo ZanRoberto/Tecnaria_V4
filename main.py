@@ -25,39 +25,34 @@ def index():
 def ask():
     try:
         user_prompt = request.json.get("prompt", "").strip()
-
-        try:
-            lang = detect(user_prompt)
-        except:
-            lang = "en"
+        lang = detect(user_prompt)
 
         system_prompts = {
-            "it": "Sei un esperto tecnico dei prodotti Tecnaria. Rispondi usando il testo fornito, collegando concetti impliciti se necessario. Se non trovi risposta lì, puoi attingere da altre fonti ufficiali Tecnaria.",
-            "en": "You are a technical expert on Tecnaria products. Use the provided text to answer, connecting related concepts. If the answer is not there, refer to other official Tecnaria sources.",
-            "fr": "Vous êtes un expert technique des produits Tecnaria. Utilisez le texte fourni pour répondre, ou appuyez-vous sur d'autres sources officielles si nécessaire.",
-            "de": "Sie sind ein technischer Experte für Tecnaria-Produkte. Verwenden Sie den bereitgestellten Text oder greifen Sie bei Bedarf auf andere offizielle Quellen zurück.",
-            "es": "Eres un experto técnico en productos Tecnaria. Usa el texto proporcionado y si es necesario, apóyate en otras fuentes oficiales."
+            "it": "Sei un esperto tecnico dei prodotti Tecnaria. Rispondi in italiano solo alla domanda, usando il testo fornito se presente. Se non c'è una risposta nel testo, puoi usare la tua conoscenza.",
+            "en": "You are a technical expert on Tecnaria products. Answer in English using only the provided text if available. If it's missing, rely on your own knowledge.",
+            "fr": "Vous êtes un expert technique des produits Tecnaria. Répondez en français en utilisant le texte fourni si disponible, sinon utilisez vos connaissances.",
+            "de": "Sie sind ein technischer Experte für Tecnaria-Produkte. Antworten Sie auf Deutsch nur mit dem bereitgestellten Text oder Ihrem Wissen.",
+            "es": "Eres un experto técnico en productos Tecnaria. Responde en español usando el texto si está disponible; si no, usa tus conocimientos."
         }
         system_prompt = system_prompts.get(lang, system_prompts["en"])
 
-        # 🔍 Prova prima blocco smart
+        # STEP 1: Prova estrazione smart se c'è una keyword
         keyword = trova_keyword(user_prompt)
         context = ""
         if keyword:
             context = estrai_blocco_smart(keyword)
 
-        # 🔁 Fallback su intero documento
+        # STEP 2: Prova a prendere tutto il documento
         if not context.strip():
             context = estrai_testo_vocami()
 
-        # 🔁 Fallback finale su scraping sito
+        # STEP 3: Prova scraping sito
         if not context.strip():
             context = scrape_tecnaria_results(user_prompt)
 
-        if not context.strip():
-            return jsonify({"error": "Nessuna informazione trovata."}), 400
-
-        prompt = f"""Il testo seguente è stato raccolto da fonti ufficiali Tecnaria. Usa solo questo contenuto per rispondere, riformulando se necessario. Se qualcosa è implicito ma chiaro, puoi includerlo nella risposta.
+        # STEP 4: Se ancora nulla, GPT può rispondere liberamente
+        if context.strip():
+            prompt = f"""Rispondi solo alla domanda sottostante, usando il testo fornito. Non includere contenuti aggiuntivi se non richiesti esplicitamente nella domanda. Se un concetto è implicito ma presente, puoi usarlo.
 
 TESTO:
 {context}
@@ -65,7 +60,14 @@ TESTO:
 DOMANDA:
 {user_prompt}
 
-RISPOSTA TECNICA:"""
+RISPOSTA:"""
+        else:
+            prompt = f"""Rispondi con precisione alla domanda qui sotto basandoti sulle tue conoscenze tecniche aggiornate, come se fossi un esperto dei prodotti e dei servizi di Tecnaria.
+
+DOMANDA:
+{user_prompt}
+
+RISPOSTA:"""
 
         response = client.chat.completions.create(
             model="gpt-4o",
@@ -75,7 +77,6 @@ RISPOSTA TECNICA:"""
             ],
             temperature=0.3
         )
-
         answer = response.choices[0].message.content
         return jsonify({"answer": answer})
     except Exception as e:
