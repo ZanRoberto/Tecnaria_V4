@@ -1,3 +1,4 @@
+
 from flask import Flask, request, jsonify, render_template
 import os
 from bridge_scraper import estrai_testo_vocami
@@ -47,6 +48,13 @@ def index():
 def ask():
     try:
         user_prompt = request.json.get("prompt", "").strip()
+
+        # RISPOSTA FISSA se chiedono l'indirizzo della sede
+        if "dove si trova tecnaria" in user_prompt.lower() or "sede tecnaria" in user_prompt.lower():
+            return jsonify({
+                "answer": "Tecnaria S.p.A. ha sede in:\n📍 Viale Pecori Giraldi, 55, 36061 Bassano del Grappa (VI), Italia"
+            })
+
         lang = rileva_lingua(user_prompt)
 
         system_prompts = {
@@ -59,12 +67,11 @@ def ask():
         system_prompt = system_prompts.get(lang, system_prompts["en"])
 
         if is_domanda_generica(user_prompt):
-            prompt = f"""Rispondi in modo chiaro e professionale alla domanda qui sotto, usando le tue conoscenze da esperto di Tecnaria.
-
-DOMANDA:
-{user_prompt}
-
-RISPOSTA:"""
+            prompt = (
+                "Rispondi in modo chiaro e professionale alla domanda qui sotto, "
+                "usando le tue conoscenze da esperto di Tecnaria.\n\n"
+                f"DOMANDA:\n{user_prompt}\n\nRISPOSTA:"
+            )
         else:
             keyword = trova_keyword(user_prompt)
             context = ""
@@ -78,22 +85,17 @@ RISPOSTA:"""
                 context = scrape_tecnaria_results(user_prompt)
 
             if context.strip():
-                prompt = f"""Rispondi solo alla domanda sottostante. Usa il testo qui sotto se è pertinente. Non aggiungere contenuti che non siano richiesti esplicitamente.
-
-TESTO:
-{context}
-
-DOMANDA:
-{user_prompt}
-
-RISPOSTA:"""
+                prompt = (
+                    "Rispondi solo alla domanda sottostante. Usa il testo qui sotto se è pertinente. "
+                    "Non aggiungere contenuti che non siano richiesti esplicitamente.\n\n"
+                    f"TESTO:\n{context}\n\nDOMANDA:\n{user_prompt}\n\nRISPOSTA:"
+                )
             else:
-                prompt = f"""Rispondi in modo chiaro e professionale alla domanda qui sotto, usando le tue conoscenze da esperto di Tecnaria.
-
-DOMANDA:
-{user_prompt}
-
-RISPOSTA:"""
+                prompt = (
+                    "Rispondi in modo chiaro e professionale alla domanda qui sotto, "
+                    "usando le tue conoscenze da esperto di Tecnaria.\n\n"
+                    f"DOMANDA:\n{user_prompt}\n\nRISPOSTA:"
+                )
 
         response = client.chat.completions.create(
             model="gpt-4o",
