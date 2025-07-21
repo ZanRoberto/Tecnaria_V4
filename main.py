@@ -4,25 +4,33 @@ from bridge_scraper import estrai_testo_vocami
 from scraper_tecnaria import scrape_tecnaria_results
 from estrai_blocco_smart import estrai_blocco_smart
 from openai import OpenAI
-from langdetect import detect
+from langdetect import detect_langs
 
 app = Flask(__name__)
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Lista di frasi che indicano domanda generale
+# Frasi indicative di una domanda generale
 DOMANDE_GENERICHE = [
-    "parlami di tecnaria",
-    "cos'è tecnaria",
-    "cosa fa tecnaria",
-    "di cosa si occupa tecnaria",
-    "tell me about tecnaria",
-    "who is tecnaria",
-    "what does tecnaria do"
+    "parlami di tecnaria", "cos'è tecnaria", "cosa fa tecnaria",
+    "di cosa si occupa tecnaria", "tell me about tecnaria",
+    "who is tecnaria", "what does tecnaria do"
 ]
+
+def rileva_lingua(prompt):
+    try:
+        lingue = detect_langs(prompt)
+        if lingue and lingue[0].prob > 0.80:
+            return lingue[0].lang
+    except:
+        pass
+    return "en"
 
 def trova_keyword(dominio):
     parole = dominio.lower().split()
-    parole_chiave = ["chiodatrice", "chiodatrici", "p560", "pulsa", "connettore", "software", "diapason", "tbs", "solaio", "blocco", "rinforzo", "collaborante"]
+    parole_chiave = [
+        "chiodatrice", "chiodatrici", "p560", "pulsa", "connettore",
+        "software", "diapason", "tbs", "solaio", "blocco", "rinforzo", "collaborante"
+    ]
     for parola in parole_chiave:
         if parola in parole:
             return parola
@@ -39,9 +47,8 @@ def index():
 def ask():
     try:
         user_prompt = request.json.get("prompt", "").strip()
-        lang = detect(user_prompt)
+        lang = rileva_lingua(user_prompt)
 
-        # Prompt GPT coerente con la lingua
         system_prompts = {
             "it": "Sei un esperto tecnico di Tecnaria. Rispondi in italiano. Usa il testo se è pertinente, altrimenti rispondi con le tue conoscenze.",
             "en": "You are a technical expert on Tecnaria. Answer in English. Use the text only if relevant, otherwise rely on your knowledge.",
@@ -51,7 +58,6 @@ def ask():
         }
         system_prompt = system_prompts.get(lang, system_prompts["en"])
 
-        # 🧠 Se domanda è GENERICA, ignora i documenti
         if is_domanda_generica(user_prompt):
             prompt = f"""Rispondi in modo chiaro e professionale alla domanda qui sotto, usando le tue conoscenze da esperto di Tecnaria.
 
@@ -60,24 +66,19 @@ DOMANDA:
 
 RISPOSTA:"""
         else:
-            # 🔍 Cerca testo tematico specifico
             keyword = trova_keyword(user_prompt)
             context = ""
             if keyword:
                 context = estrai_blocco_smart(keyword)
 
-            # 🧩 Fallback documento completo
             if not context.strip():
                 context = estrai_testo_vocami()
 
-            # 🌐 Fallback scraping
             if not context.strip():
                 context = scrape_tecnaria_results(user_prompt)
 
-            # 🧾 Prompt costruito con testo utile (se esiste)
             if context.strip():
-                prompt = f"""Rispondi solo alla domanda sottostante. Usa il testo qui sotto se è pertinente.
-Non aggiungere contenuti che non siano richiesti esplicitamente.
+                prompt = f"""Rispondi solo alla domanda sottostante. Usa il testo qui sotto se è pertinente. Non aggiungere contenuti che non siano richiesti esplicitamente.
 
 TESTO:
 {context}
@@ -94,7 +95,6 @@ DOMANDA:
 
 RISPOSTA:"""
 
-        # GPT chiamata finale
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
