@@ -5788,10 +5788,11 @@ class OvertopBassanoV15Production:
                     preds = []
                     for i in range(min(len(_ph), len(_ch))):
                         c = _ch[i]
+                        _price_ref = _ph[i] if _ph[i] > 0 else 100.0
                         if c >= 0.65:
-                            delta = _delta_fuoco if _delta_fuoco != 0 else 5.0
+                            delta = _delta_fuoco if _delta_fuoco != 0 else _price_ref * 0.003
                         elif c >= 0.40:
-                            delta = _delta_carica if _delta_carica != 0 else 2.0
+                            delta = _delta_carica if _delta_carica != 0 else _price_ref * 0.001
                         else:
                             delta = 0.0
                         preds.append(round(_ph[i] + delta, 2))
@@ -5801,10 +5802,11 @@ class OvertopBassanoV15Production:
                     # Conferme: predizione indicava direzione giusta?
                     conferme = 0
                     totale = 0
+                    _sig_threshold = (_ph[0] * 0.0005) if _ph else 0.05
                     for i in range(1, len(preds)):
-                        dir_pred   = preds[i] - preds[i-1]   # predizione sale o scende
-                        dir_reale  = _ph[i]   - _ph[i-1]     # mercato sale o scende
-                        if abs(dir_pred) > 0.5:               # solo segnali significativi
+                        dir_pred   = preds[i] - preds[i-1]
+                        dir_reale  = _ph[i]   - _ph[i-1]
+                        if abs(dir_pred) > _sig_threshold:    # solo segnali significativi
                             totale += 1
                             if (dir_pred > 0) == (dir_reale > 0):
                                 conferme += 1
@@ -5823,7 +5825,8 @@ class OvertopBassanoV15Production:
                     for i in range(1, min(len(preds), len(_ph))):
                         dp = preds[i] - preds[i-1]
                         dr = _ph[i]   - _ph[i-1]
-                        if abs(dp) > 1.0 and abs(dr) > 0.1:
+                        _dp_thresh = (_ph[0] * 0.0005) if _ph else 0.05
+                        if abs(dp) > _dp_thresh and abs(dr) > 0.01:
                             movimenti_pred.append(abs(dp))
                             movimenti_reali.append(abs(dr))
 
