@@ -1,5 +1,0 @@
-flask
-openai
-requests
-beautifulsoup4
-langdetect
