@@ -1161,6 +1161,13 @@ canvas.spark { width:100%; height:40px; }
           <div style="font-size:9px;color:var(--dim)">P&L</div>
           <div id="sc-pnl" style="font-size:14px;font-weight:500;">$0</div>
         </div>
+        <div style="background:rgba(100,100,100,0.08);border-radius:6px;padding:8px;text-align:center;">
+          <div style="font-size:9px;color:var(--dim)">💰 PROB. PNL</div>
+          <div id="sc-prob-pnl" style="font-size:14px;font-weight:500;color:var(--dim)">—</div>
+          <div id="sc-prob-bar" style="margin-top:3px;height:3px;border-radius:2px;background:rgba(255,255,255,0.08);">
+            <div id="sc-prob-fill" style="height:100%;border-radius:2px;width:0%;transition:width 0.5s;"></div>
+          </div>
+        </div>
       </div>
 
       <!-- Grafico due linee — canvas puro -->
@@ -1409,8 +1416,8 @@ const SCPanel = (() => {
         labels.push(i);
         const c = ch[i] !== undefined ? ch[i] : carica;
         // Delta reali dal Veritas — non fattore inventato
-        const deltaFuoco  = hb.pred_delta_fuoco  || 5.0;
-        const deltaCarica = hb.pred_delta_carica || 2.0;
+        const deltaFuoco  = hb.pred_delta_fuoco  || (price * 0.003);
+        const deltaCarica = hb.pred_delta_carica || (price * 0.001);
         let delta = 0;
         if (c >= 0.65)      delta = deltaFuoco;
         else if (c >= 0.40) delta = deltaCarica;
@@ -1421,7 +1428,7 @@ const SCPanel = (() => {
       prices.push(price);
       labels.push(labels.length);
       if (prices.length > MAX) { prices.shift(); labels.shift(); }
-      preds.push(Math.round((price + (carica - 0.5) * 150) * 100) / 100);
+      preds.push(Math.round((price + (carica - 0.5) * price * 0.002) * 100) / 100);
       cariche.push(Math.round(carica * 1000) / 1000);
       if (preds.length   > MAX) preds.shift();
       if (cariche.length > MAX) cariche.shift();
@@ -1455,14 +1462,15 @@ const SCPanel = (() => {
         const p = t.pnl || 0;
         pnlTot += p;
         if (p > 0) wins++; else losses++;
-        // Marker sul grafico
-        const idx = Math.min(prices.length - 1, Math.max(0, prices.length - 10));
-        if (p > 0) sellMkrs.push({x: labels[idx]||0, y: t.price||price});
-        else       sellMkrs.push({x: labels[idx]||0, y: t.price||price, loss: true});
+        const idx = prices.length - 1;
+        const tradePrice = t.price || (prices[idx] || price);
+        if (p > 0) sellMkrs.push({x: idx, y: tradePrice});
+        else       sellMkrs.push({x: idx, y: tradePrice, loss: true});
       });
       trades.filter(t => t.type === 'M2_ENTRY').forEach(t => {
-        const idx = Math.min(prices.length - 1, Math.max(0, prices.length - 15));
-        buyMkrs.push({x: labels[idx]||0, y: t.price||price});
+        const idx = prices.length - 1;
+        const tradePrice = t.price || (prices[idx] || price);
+        buyMkrs.push({x: idx, y: tradePrice});
       });
     }
 
@@ -1474,6 +1482,48 @@ const SCPanel = (() => {
     const pnlEl = document.getElementById('sc-pnl');
     if (pnlEl) { pnlEl.textContent = (pnlTot>=0?'+':'') + '$' + Math.round(pnlTot);
                pnlEl.style.color = pnlTot >= 0 ? '#00ff88' : '#ff3355'; }
+
+    // PROB. PNL — hit_economica dal contesto corrente
+    const probEl  = document.getElementById('sc-prob-pnl');
+    const fillEl  = document.getElementById('sc-prob-fill');
+    if (probEl && fillEl) {
+      const st = hb.signal_tracker || {};
+      const stTop = st.top || [];
+      const regime  = hb.regime  || '';
+      const vol     = hb.volatility || '';
+      const FEE_SIM = hb.last_price ? hb.last_price * 0.0004 : 0.10;
+      let bestHit = null;
+      stTop.forEach(row => {
+        if (row.n < 5) return;
+        const ctx = row.context || '';
+        const pnlAvg = row.pnl_sim_avg || 0;
+        let hitEcon;
+        if (pnlAvg > FEE_SIM * 3)    hitEcon = 0.80;
+        else if (pnlAvg > FEE_SIM)   hitEcon = 0.60;
+        else if (pnlAvg > 0)          hitEcon = 0.40;
+        else if (pnlAvg > -FEE_SIM)  hitEcon = 0.25;
+        else                           hitEcon = 0.10;
+        if (ctx.includes(regime) || ctx.includes(vol)) {
+          if (bestHit === null || hitEcon > bestHit) bestHit = hitEcon;
+        }
+      });
+      if (bestHit === null && stTop.length > 0) {
+        const avg = stTop.filter(r=>r.n>=5).reduce((s,r)=>s+(r.pnl_sim_avg||0),0) / Math.max(1,stTop.filter(r=>r.n>=5).length);
+        bestHit = avg > FEE_SIM ? 0.60 : avg > 0 ? 0.40 : 0.20;
+      }
+      if (bestHit !== null) {
+        const pct = Math.round(bestHit * 100);
+        const col = bestHit >= 0.55 ? '#00ff88' : bestHit >= 0.35 ? '#ffd700' : '#ff3355';
+        probEl.textContent = pct + '%';
+        probEl.style.color = col;
+        fillEl.style.width = pct + '%';
+        fillEl.style.background = col;
+      } else {
+        probEl.textContent = '—';
+        probEl.style.color = 'var(--dim)';
+        fillEl.style.width = '0%';
+      }
+    }
 
     // Narrativa oracolo interno
     const narr = hb.oi_narrativa || [];
@@ -1597,22 +1647,18 @@ const SCPanel = (() => {
       const dir    = window._hb_live.m2_direction || 'LONG';
       const stato  = window._hb_live.oi_stato || '';
       if (entryP > 0) {
-        // Linea orizzontale tratteggiata al prezzo di entry
         const yEntry = yOf(entryP);
         ctx1.beginPath(); ctx1.strokeStyle='rgba(255,215,0,0.5)';
         ctx1.lineWidth=1; ctx1.setLineDash([4,3]);
         ctx1.moveTo(PAD.left, yEntry); ctx1.lineTo(PAD.left+w1, yEntry);
         ctx1.stroke(); ctx1.setLineDash([]);
-        // Triangolo entry sul bordo sinistro
         const col = dir === 'LONG' ? '#00ff88' : '#ff3355';
         const sym = dir === 'LONG' ? '▲' : '▼';
         ctx1.fillStyle = col; ctx1.font = 'bold 13px sans-serif'; ctx1.textAlign = 'left';
         ctx1.fillText(sym, PAD.left + 2, yEntry + (dir==='LONG'?12:-2));
-        // Label prezzo entry
         ctx1.font = '9px Share Tech Mono'; ctx1.fillStyle = 'rgba(255,215,0,0.8)';
         ctx1.textAlign = 'right';
         ctx1.fillText('IN@$'+Math.round(entryP), PAD.left+w1-2, yEntry-3);
-        // Se FUOCO — pulsa con cerchio sul prezzo corrente
         if (stato === 'FUOCO') {
           const xNow = xOf(prices.length-1);
           const yNow = yOf(prices[prices.length-1]||entryP);
