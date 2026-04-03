@@ -5817,6 +5817,8 @@ class OvertopBassanoV15Production:
                     self.heartbeat_data["pred_score"]       = conf_pct
                     self.heartbeat_data["pred_trade_n"]     = self._pred_trade_n
                     self.heartbeat_data["pred_trade_pnl"]   = round(self._pred_trade_pnl, 2)
+                    self.heartbeat_data["pred_delta_fuoco"]  = round(_delta_fuoco, 4)
+                    self.heartbeat_data["pred_delta_carica"] = round(_delta_carica, 4)
 
                     # Ratio magnitudine: predizione vs movimento reale
                     # Misura quanto la predizione sovra/sottostima il mercato
