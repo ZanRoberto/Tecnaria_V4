@@ -521,8 +521,25 @@ def download_capsule():
         abort(404, "capsule_attive.json non trovato")
     return send_file(capsule_file, as_attachment=True, download_name="capsule_attive.json")
 
-@app.route('/debug/db')
-def debug_db():
+@app.route('/admin/delete_tossico', methods=['POST'])
+def delete_tossico_capsule():
+    """Elimina capsule TOSSICO ereditate da BTC da capsule_attive.json"""
+    capsule_file = "capsule_attive.json"
+    try:
+        if not os.path.exists(capsule_file):
+            return jsonify({"ok": False, "error": "capsule_attive.json non trovato"})
+        with open(capsule_file, 'r') as f:
+            capsule = json.load(f)
+        prima = len(capsule)
+        capsule = [c for c in capsule if 'TOSSICO' not in str(c.get('capsule_id','')) and 'TOSSICO' not in str(c.get('id',''))]
+        dopo = len(capsule)
+        with open(capsule_file, 'w') as f:
+            json.dump(capsule, f, indent=2)
+        log(f"[ADMIN] 🗑️ Capsule TOSSICO eliminate: {prima - dopo} (rimaste: {dopo})")
+        return jsonify({"ok": True, "eliminate": prima - dopo, "rimaste": dopo})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
     _check_key()
     if not os.path.exists(DB_PATH):
         return json.dumps({"error": "DB non trovato"}), 404
@@ -1033,6 +1050,14 @@ canvas.spark { width:100%; height:40px; }
           <div style="color:var(--dim); font-size:10px; text-align:center; padding:20px 0">
             Nessuna capsule attiva.<br>Il sistema impara dai trade.
           </div>
+        </div>
+        <div style="margin-top:8px; text-align:right;">
+          <button id="btn-del-tossico" onclick="deleteTossicoCapsule()"
+            style="font-size:9px; padding:4px 10px; background:#1a0a0a; border:1px solid #ff3355;
+                   color:#ff3355; border-radius:3px; cursor:pointer; font-family:inherit;">
+            🗑️ Elimina capsule TOSSICO ereditate
+          </button>
+          <div id="del-tossico-result" style="font-size:9px; color:var(--dim); margin-top:3px;"></div>
         </div>
       </div>
     </div>
@@ -1860,8 +1885,7 @@ const LiveChart = (() => {
     const vals = prices.map(p=>p.v);
     let mn=Math.min(...vals), mx=Math.max(...vals);
     const sp=mx-mn;
-    const minSpan = (mx||100) * 0.006;
-    if(sp<minSpan){const pad=minSpan/2; mn-=pad; mx+=pad;}else{mn-=sp*.06;mx+=sp*.06;}
+    if(sp<15){mn-=8;mx+=8;}else{mn-=sp*.06;mx+=sp*.06;}
 
     const xOf = i => PAD.left + (i/(prices.length-1))*w;
     const yOf = v => PAD.top  + h - ((v-mn)/(mx-mn))*h;
@@ -2485,6 +2509,32 @@ function sendCmd(cmd){
 
 update();
 setInterval(update, 2000);
+
+async function deleteTossicoCapsule() {
+  const btn = document.getElementById('btn-del-tossico');
+  const res = document.getElementById('del-tossico-result');
+  btn.disabled = true;
+  btn.textContent = '⏳ Eliminando...';
+  try {
+    const r = await fetch('/admin/delete_tossico', {method:'POST'});
+    const d = await r.json();
+    if (d.ok) {
+      res.style.color = '#00ff88';
+      res.textContent = `✅ Eliminate ${d.eliminate} capsule TOSSICO (rimaste: ${d.rimaste})`;
+      btn.textContent = '✅ Fatto';
+    } else {
+      res.style.color = '#ff3355';
+      res.textContent = '❌ ' + (d.error || 'Errore');
+      btn.disabled = false;
+      btn.textContent = '🗑️ Elimina capsule TOSSICO ereditate';
+    }
+  } catch(e) {
+    res.style.color = '#ff3355';
+    res.textContent = '❌ Errore: ' + e.message;
+    btn.disabled = false;
+    btn.textContent = '🗑️ Elimina capsule TOSSICO ereditate';
+  }
+}
 </script>
 </body>
 </html>
