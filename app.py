@@ -1860,7 +1860,8 @@ const LiveChart = (() => {
     const vals = prices.map(p=>p.v);
     let mn=Math.min(...vals), mx=Math.max(...vals);
     const sp=mx-mn;
-    if(sp<15){mn-=8;mx+=8;}else{mn-=sp*.06;mx+=sp*.06;}
+    const minSpan = (mx||100) * 0.006;
+    if(sp<minSpan){const pad=minSpan/2; mn-=pad; mx+=pad;}else{mn-=sp*.06;mx+=sp*.06;}
 
     const xOf = i => PAD.left + (i/(prices.length-1))*w;
     const yOf = v => PAD.top  + h - ((v-mn)/(mx-mn))*h;
