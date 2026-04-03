@@ -330,6 +330,19 @@ class StabilityTelemetry:
 # CAPSULE RUNTIME
 # ===========================================================================
 
+# ===========================================================================
+# CAPSULE MANAGER — Sistema Unificato
+# Sostituisce CapsuleRuntime + ConfigHotReloader + IntelligenzaAutonoma
+# + VETI_LONG/SHORT hardcodati. Asset-aware. SQLite. Dashboard-ready.
+# ===========================================================================
+try:
+    from capsule_manager import CapsuleManager
+    _CM_AVAILABLE = True
+    log.info("[CM] ✅ CapsuleManager disponibile")
+except ImportError:
+    _CM_AVAILABLE = False
+    log.warning("[CM] ⚠️ capsule_manager.py non trovato — uso fallback CapsuleRuntime")
+
 class CapsuleRuntime:
     """Valuta e applica capsule da capsule_attive.json - hot reload senza restart."""
 
@@ -3441,11 +3454,30 @@ class CampoGravitazionale:
           direction: "LONG" o "SHORT"
           breakdown: dict dettaglio per log
         """
-        # -- VETI ASSOLUTI -------------------------------------------------
+        # -- VETI ASSOLUTI — ora gestiti da CapsuleManager ----------------
+        # Se CapsuleManager disponibile: i veti sono nel DB, asset-aware,
+        # modificabili da dashboard senza deploy.
+        # Se non disponibile: fallback ai VETI_LONG/SHORT hardcodati.
         combo = (momentum, volatility, trend)
-        veti = self.VETI_SHORT if self._direction == "SHORT" else self.VETI_LONG
-        if combo in veti:
-            return self._veto(f"TOSSICO_{self._direction}_{momentum}_{volatility}_{trend}")
+        _bot = getattr(self, '_bot_ref', None)
+        _cm  = getattr(_bot, 'capsule_manager', None) if _bot else None
+        if _cm is not None:
+            _veto_ctx = {
+                'momentum':   momentum,
+                'volatility': volatility,
+                'trend':      trend,
+                'direction':  self._direction,
+                'regime':     getattr(self, '_regime_current', ''),
+                'drift_pct':  getattr(self, '_last_drift', 0.0),
+            }
+            _cm_result = _cm.valuta(_veto_ctx)
+            if _cm_result.get('blocca'):
+                return self._veto(_cm_result.get('reason', f"CM_TOSSICO_{self._direction}_{momentum}_{volatility}_{trend}"))
+        else:
+            # Fallback hardcodato
+            veti = self.VETI_SHORT if self._direction == "SHORT" else self.VETI_LONG
+            if combo in veti:
+                return self._veto(f"TOSSICO_{self._direction}_{momentum}_{volatility}_{trend}")
 
         if matrimonio_name in divorzio_set:
             return self._veto("DIVORZIO_PERMANENTE")
@@ -4350,9 +4382,24 @@ class OvertopBassanoV15Production:
         self.seed_scorer     = SeedScorer(window=50)
         self.oracolo         = OracoloDinamico()
         self.memoria         = MemoriaMatrimoni()
-        self.capsule_runtime = CapsuleRuntime(capsule_file="capsule_attive.json")
-        self.config_reloader = ConfigHotReloader(capsule_path="capsule_attive.json")
-        self.realtime_engine = IntelligenzaAutonoma(capsule_file="capsule_attive.json", db_path=DB_PATH)
+
+        # -- CAPSULE MANAGER UNIFICATO ------------------------------------
+        if _CM_AVAILABLE:
+            self.capsule_manager = CapsuleManager(db_path=DB_PATH, asset=SYMBOL)
+            # Alias per compatibilità con codice esistente
+            self.capsule_runtime = self.capsule_manager
+            self.config_reloader = self.capsule_manager
+            self.realtime_engine = self.capsule_manager
+            log.info(f"[CM] ✅ CapsuleManager attivo — asset={SYMBOL}")
+        else:
+            # Fallback ai sistemi originali
+            self.capsule_manager = None
+            self.capsule_runtime = CapsuleRuntime(capsule_file="capsule_attive.json")
+            self.config_reloader = ConfigHotReloader(capsule_path="capsule_attive.json")
+            self.realtime_engine = IntelligenzaAutonoma(capsule_file="capsule_attive.json", db_path=DB_PATH)
+            log.warning("[CM] ⚠️ Fallback ai sistemi originali")
+        # -----------------------------------------------------------------
+
         self.log_analyzer    = LogAnalyzer()
         self.ai_explainer    = AIExplainer(db_path=NARRATIVES_DB)
         self.calibratore     = AutoCalibratore()
@@ -4405,6 +4452,7 @@ class OvertopBassanoV15Production:
 
         # -- MOTORE 2: CAMPO GRAVITAZIONALE (shadow trading) --------------
         self.campo = CampoGravitazionale()
+        self.campo._bot_ref = self  # riferimento al bot per CapsuleManager
         self._shadow = None          # shadow trade aperto (dict o None)
         self._shadow_entry_time = None
         self._shadow_entry_momentum = None
@@ -7371,7 +7419,9 @@ class OvertopBassanoV15Production:
                     # -- PHANTOM TRACKER - zavorra o protezione? -------
                     "phantom":            self._get_phantom_summary(),
                     # -- INTELLIGENZA AUTONOMA - capsule vive -----------
-                    "ia_stats":           self.realtime_engine.get_stats(),
+                    "ia_stats":           (self.capsule_manager.get_stats()
+                                           if self.capsule_manager
+                                           else self.realtime_engine.get_stats()),
                     # -- PRE-TRADE SIGNAL TRACKER ---------------------------
                     "signal_tracker": {
                         "open":      self.signal_tracker.get_open_count(),
