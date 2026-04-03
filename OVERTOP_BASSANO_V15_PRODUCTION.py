@@ -42,7 +42,7 @@ DB_PATH        = os.environ.get("DB_PATH", "/home/app/data/trading_data.db")
 NARRATIVES_DB  = os.environ.get("NARRATIVES_DB", "/home/app/data/narratives.db")
 
 # --- BINANCE -----------------------------------------------------------------
-SYMBOL         = "SOLUSDC"
+SYMBOL         = "BTCUSDC"
 BINANCE_WS_URL = f"wss://stream.binance.com:9443/ws/{SYMBOL.lower()}@aggTrade"
 
 # ===========================================================================
