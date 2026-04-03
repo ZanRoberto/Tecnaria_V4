@@ -7352,6 +7352,7 @@ class OvertopBassanoV15Production:
                     "m2_pnl":             round(self._m2_pnl, 4),
                     "m2_shadow_open":     self._shadow is not None,
                     "m2_direction":       self.campo._direction,
+                    "m2_entry_price":     round(self._shadow["price_entry"], 4) if self._shadow else 0,
                     "m2_state":           self._state,
                     "m2_loss_streak":     self._m2_loss_streak,
                     "m2_cooldown":        max(0, self._m2_cooldown_until - time.time()),
