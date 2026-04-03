@@ -4626,6 +4626,7 @@ class OvertopBassanoV15Production:
                 self.heartbeat_data["last_price"] = round(price, 2)
                 self.heartbeat_data["last_tick"]  = datetime.utcnow().isoformat()
                 self.heartbeat_data["tick_count"] = self.heartbeat_data.get("tick_count", 0) + 1
+                self.heartbeat_data["symbol"]     = SYMBOL
         except Exception:
             pass
         finally:
