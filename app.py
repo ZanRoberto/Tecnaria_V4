@@ -1394,6 +1394,7 @@ const SCPanel = (() => {
   function update(hb) {
     const price = hb.last_price || 0;
     if (!price) return;
+    window._hb_live = hb;  // accessibile al canvas per marker live
 
     // Usa storia completa dal bot — non accumula tick per tick
     const carica = hb.oi_carica || 0;
@@ -1573,7 +1574,7 @@ const SCPanel = (() => {
     preds.forEach((p,i)=>{ if(p>0) i===0?ctx1.moveTo(xOf(i),yOf(p)):ctx1.lineTo(xOf(i),yOf(p)); });
     ctx1.stroke(); ctx1.setLineDash([]);
 
-    // BUY markers
+    // BUY markers storici
     buyMkrs.forEach(m=>{
       const xi=Math.min(prices.length-1,Math.max(0,m.x));
       const xp=xOf(xi), yp=yOf(m.y||prices[xi]||minP);
@@ -1581,7 +1582,7 @@ const SCPanel = (() => {
       ctx1.fillText('▲',xp,yp+14);
     });
 
-    // SELL markers
+    // SELL markers storici
     sellMkrs.forEach(m=>{
       const xi=Math.min(prices.length-1,Math.max(0,m.x));
       const xp=xOf(xi), yp=yOf(m.y||prices[xi]||minP);
@@ -1589,6 +1590,41 @@ const SCPanel = (() => {
       ctx1.font='12px sans-serif'; ctx1.textAlign='center';
       ctx1.fillText('▼',xp,yp-4);
     });
+
+    // ── MARKER LIVE — posizione aperta in tempo reale ─────────
+    if (window._hb_live && window._hb_live.m2_shadow_open) {
+      const entryP = window._hb_live.m2_entry_price || 0;
+      const dir    = window._hb_live.m2_direction || 'LONG';
+      const stato  = window._hb_live.oi_stato || '';
+      if (entryP > 0) {
+        // Linea orizzontale tratteggiata al prezzo di entry
+        const yEntry = yOf(entryP);
+        ctx1.beginPath(); ctx1.strokeStyle='rgba(255,215,0,0.5)';
+        ctx1.lineWidth=1; ctx1.setLineDash([4,3]);
+        ctx1.moveTo(PAD.left, yEntry); ctx1.lineTo(PAD.left+w1, yEntry);
+        ctx1.stroke(); ctx1.setLineDash([]);
+        // Triangolo entry sul bordo sinistro
+        const col = dir === 'LONG' ? '#00ff88' : '#ff3355';
+        const sym = dir === 'LONG' ? '▲' : '▼';
+        ctx1.fillStyle = col; ctx1.font = 'bold 13px sans-serif'; ctx1.textAlign = 'left';
+        ctx1.fillText(sym, PAD.left + 2, yEntry + (dir==='LONG'?12:-2));
+        // Label prezzo entry
+        ctx1.font = '9px Share Tech Mono'; ctx1.fillStyle = 'rgba(255,215,0,0.8)';
+        ctx1.textAlign = 'right';
+        ctx1.fillText('IN@$'+Math.round(entryP), PAD.left+w1-2, yEntry-3);
+        // Se FUOCO — pulsa con cerchio sul prezzo corrente
+        if (stato === 'FUOCO') {
+          const xNow = xOf(prices.length-1);
+          const yNow = yOf(prices[prices.length-1]||entryP);
+          ctx1.beginPath();
+          ctx1.arc(xNow, yNow, 5, 0, Math.PI*2);
+          ctx1.fillStyle = col; ctx1.fill();
+          ctx1.beginPath();
+          ctx1.arc(xNow, yNow, 8, 0, Math.PI*2);
+          ctx1.strokeStyle = col; ctx1.lineWidth = 1.5; ctx1.stroke();
+        }
+      }
+    }
 
     // Label prezzo live
     const lp=prices[prices.length-1];
